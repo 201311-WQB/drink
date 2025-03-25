@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>圆盘抽奖</title>
+  <style>
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background: #ECEFF1; /* 柔和的灰蓝色背景 */
+      flex-direction: column;
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+    }
+    .wheel-container {
+      position: relative;
+      width: 300px;
+      height: 300px;
+      box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+      border-radius: 50%;
+      overflow: hidden;
+      background: #ffffff;
+    }
+    #wheelCanvas {
+      position: relative;
+      z-index: 1;
+    }
+    .pointer {
+      position: absolute;
+      top: 10%;
+      left: 50%;
+      transform: translateX(-50%) rotate(180deg);
+      width: 0;
+      height: 0;
+      border-left: 8px solid transparent;
+      border-right: 8px solid transparent;
+      border-top: 15px solid #E53935;
+      z-index: 3;
+      filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.2));
+    }
+    .pointer-line {
+      position: absolute;
+      top: 10%;
+      left: 50%;
+      width: 2px;
+      height: 40%;
+      background: linear-gradient(to bottom, rgba(229,57,53,0.2), #E53935);
+      transform-origin: top center;
+      z-index: 2;
+    }
+    button {
+      margin-top: 20px;
+      padding: 12px 30px;
+      font-size: 16px;
+      cursor: pointer;
+      border: none;
+      background: linear-gradient(135deg, #546E7A, #37474F);
+      color: white;
+      border-radius: 25px;
+      transition: all 0.3s;
+      box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
+      font-weight: bold;
+    }
+    button:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+    }
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 12px rgba(0, 0, 0, 0.2);
+    }
+    .result {
+      margin-top: 20px;
+      font-size: 18px;
+      font-weight: bold;
+      color: #000000;
+      min-height: 24px;
+      text-shadow: 0 1px 1px rgba(0, 0, 0, 0.1);
+    }
+    h1 {
+      color: #37474F;
+      margin-bottom: 30px;
+      font-weight: 300;
+    }
+    .counter {
+      margin-top: 10px;
+      font-size: 16px;
+      color: #37474F;
+    }
+    .reset-button {
+      margin-top: 20px;
+      padding: 12px 30px;
+      font-size: 16px;
+      cursor: pointer;
+      border: none;
+      background: #FF7043;
+      color: white;
+      border-radius: 25px;
+      transition: all 0.3s;
+      box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
+    }
+    .reset-button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 12px rgba(0, 0, 0, 0.2);
+    }
+  </style>
+</head>
+<body>
+  <h1>幸运抽奖</h1>
+  <div class="wheel-container">
+    <canvas id="wheelCanvas" width="300" height="300"></canvas>
+    <div class="pointer-line"></div>
+    <div class="pointer"></div>
+  </div>
+  <button id="spinButton" onclick="spinWheel()">开始抽奖</button>
+  <div class="counter" id="counter">抽奖次数: 0</div>
+  <div class="result" id="result"></div>
+  <button class="reset-button" onclick="resetWheel()">重置抽奖</button>
+
+  <script>
+    const wheelCanvas = document.getElementById("wheelCanvas");
+    const ctx = wheelCanvas.getContext("2d");
+    const resultDisplay = document.getElementById("result");
+    const spinButton = document.getElementById("spinButton");
+    const resetButton = document.querySelector(".reset-button");
+    const counterDisplay = document.getElementById("counter");
+    const options = [
+      "不喝酒", "大冒险", "喝半杯", "正对面的喝酒",
+      "真心话", "指定一个人喝酒", "自罚一杯", "和一个人挑战喝酒",
+      "逛三园", "摇骰子比大小", "表演一个节目", "挡酒牌"
+    ];
+    const numOptions = options.length; // 12个扇区
+    let isSpinning = false;
+    let currentRotation = 0;
+    let spinCount = 0;
+    let lastSelectedIndex = null; // 记录上一次选中的索引
+
+    function drawWheel() {
+      const radius = wheelCanvas.width / 2;
+      const innerRadius = radius * 0.9;  // 小圆半径
+      const outerRadius = radius * 1.0; // 大圆半径（小圆半径的1.2倍）
+
+      ctx.clearRect(0, 0, wheelCanvas.width, wheelCanvas.height);
+      
+      // 绘制大圆环
+      ctx.strokeStyle = "#B0BEC5";
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.arc(radius, radius, outerRadius, 0, Math.PI * 2);
+      ctx.stroke();
+      
+      // 绘制小圆
+      ctx.fillStyle = "#ffffff";
+      ctx.beginPath();
+      ctx.arc(radius, radius, innerRadius, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // 绘制小圆和大圆之间的渐变区域
+      const gradient = ctx.createRadialGradient(radius, radius, innerRadius, radius, radius, outerRadius);
+      gradient.addColorStop(0, "rgba(255, 235, 59, 0.8)"); // 渐变的颜色
+      gradient.addColorStop(1, "rgba(255, 87, 34, 0.8)");
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(radius, radius, outerRadius, 0, Math.PI * 2);
+      ctx.fill();
+      
+      const arc = (2 * Math.PI) / numOptions;
+      for (let i = 0; i < numOptions; i++) {
+        const startAngle = i * arc - Math.PI / 2;
+        const endAngle = (i + 1) * arc - Math.PI / 2;
+        
+        ctx.fillStyle = "#ffffff";
+        ctx.beginPath();
+        ctx.moveTo(radius, radius);
+        ctx.arc(radius, radius, innerRadius, startAngle, endAngle);
+        ctx.closePath();
+        ctx.fill();
+        
+        // 绘制分割线
+        ctx.strokeStyle = "#B0BEC5"; 
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        ctx.save();
+        ctx.translate(radius, radius);
+        ctx.rotate(startAngle + arc / 2);
+
+        // 根据圆环半径来调整字体大小
+        const fontSize = Math.max(12, Math.floor(innerRadius * 0.11));  // 字体大小随圆半径变化
+        ctx.fillStyle = "#000000";
+        ctx.font = `bold ${fontSize}px 'Helvetica Neue', Arial, sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(options[i], innerRadius * 0.55, 0); // 文本位置
+        ctx.restore();
+      }
+      
+      // 绘制加深的颜色
+      if (lastSelectedIndex !== null) {
+        const startAngle = lastSelectedIndex * arc - Math.PI / 2;
+        const endAngle = (lastSelectedIndex + 1) * arc - Math.PI / 2;
+        
+        ctx.fillStyle = "rgba(255, 152, 0, 0.5)"; // 橙色加深效果
+        ctx.beginPath();
+        ctx.moveTo(radius, radius);
+        ctx.arc(radius, radius, innerRadius, startAngle, endAngle);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+
+    function spinWheel() {
+      if (isSpinning) return;
+      isSpinning = true;
+      spinButton.disabled = true;
+      
+      const randomIndex = Math.floor(Math.random() * numOptions);
+      const arcDegree = 360 / numOptions;
+      const centerAngle = randomIndex * arcDegree + arcDegree / 2;
+      let targetAngle = (360 - centerAngle) % 360;
+      
+      const randomCircles = 5 + Math.floor(Math.random() * 4);
+      const extraRotation = (360 * randomCircles) + targetAngle - (currentRotation % 360);
+      const rotationDelta = extraRotation < 0 ? extraRotation + 360 : extraRotation;
+      
+      currentRotation += rotationDelta;
+      
+      wheelCanvas.style.transform = `rotate(${currentRotation}deg)`;
+      const animationDuration = 3000 + Math.floor(Math.random() * 2000);
+      wheelCanvas.style.transition = `transform ${animationDuration}ms cubic-bezier(0.25, 0.1, 0.25, 1)`;
+      
+      setTimeout(() => {
+        const finalRotation = currentRotation % 360;
+        const pointedAngle = (360 - finalRotation + 360) % 360;
+        const index = Math.floor(pointedAngle / arcDegree) % numOptions;
+        resultDisplay.textContent = options[index];
+        lastSelectedIndex = index; // 记录当前选中的索引
+        drawWheel(); // 重新绘制轮盘以显示加深的颜色
+        
+        // 读出结果
+        const utterance = new SpeechSynthesisUtterance(`中奖名称是 ${options[index]}`);
+        window.speechSynthesis.speak(utterance);
+        
+        isSpinning = false;
+        spinButton.disabled = false;
+        spinCount++;
+        counterDisplay.textContent = `抽奖次数: ${spinCount}`;
+      }, animationDuration);
+    }
+
+    function resetWheel() {
+      currentRotation = 0;
+      lastSelectedIndex = null; // 清空选中的索引记录
+      drawWheel();
+      resultDisplay.textContent = '';
+      spinCount = 0;
+      counterDisplay.textContent = '抽奖次数: 0';
+      spinButton.disabled = false;
+    }
+
+    drawWheel();
+    window.addEventListener('resize', drawWheel);
+  </script>
+</body>
+</html>
